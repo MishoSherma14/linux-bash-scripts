@@ -736,7 +736,7 @@ centos_install_dns_apache() {
         centos_install_apache
 }
 
-centos_install_dns_apache_ftp() {
+centos_install_dns_apache() {
         centos_install_dns
         centos_install_apache
 }
@@ -745,15 +745,15 @@ centos_install_dns_apache_ftp() {
 
 read -p "Enter your choice 
 	
-	(1.dns for debian, 
- 	 2.apache for debian, 
-	 3.ftp for debian, 
-	 4.dns_apache for debian, 
-	 5.dns_apache_ftp for debian, 
+	(1.DNS for debian, 
+ 	 2.Apache for debian, 
+	 3.FTP for debian, 
+	 4.DNS_Apache for debian, 
+	 5.DNS_Apache_FTP for debian, 
 
-	 6.dns for contos, 
-	 7.apache for centos, 
-	 8.dns_apache for centos): " choice2
+	 6.DNS for contos, 
+	 7.Apache for centos, 
+	 8.DNS_Apache for centos): " choice2
 
 case "$choice2" in
     1)
