@@ -9,7 +9,7 @@
 show_menu1() {
     echo "which linux base do you use?"
     echo "1. debian"
-    echo "2. RHAL & centos"
+    echo "2. centos"
 }
 
 debian_static_ip() {
