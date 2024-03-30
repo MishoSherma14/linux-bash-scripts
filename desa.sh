@@ -1,10 +1,7 @@
 #!/bin/bash
 
-### It's open sorce script so you can change or modify it! ###
-
 
 ############## Static IP For Debian ##############
-
 
 show_menu1() {
     echo "which linux base do you use?"
@@ -19,7 +16,6 @@ apt upgrade -y
 apt install openvswitch-switch -y
 systemctl start openvswitch-switch
 systemctl enable openvswitch-switch
-
 
 read -p " Enter the domain name: " DOMAIN
 hostnamectl set-hostname ns1.$DOMAIN
@@ -52,7 +48,6 @@ network:
 EOF
 
 netplan apply
-systemctl restart NetworkManager
 }
 
 
@@ -209,19 +204,19 @@ EOF
 
 read -p "Do you have FTP server? (Y/N): " ftp
 
-if [ "$ftp" = "y" ]; then
+if [ "$ftp" = "y" ] || [ "$ftp" = "Y" ]; then
 	cat << EOF >> /etc/bind/zones/$ZONE_FILE
 ftp	IN	A	$SERVER_IP
 EOF
 
-elif [ "$ftp" = "n" ]; then
+elif [ "$ftp" = "n" ] || [ "$ftp" = "N" ]; then
 	echo "you don't have FTP server"
 fi
 
 
 read -p "Do you have any clients? (Y/N): " client
 
-if [ "$client" = "y" ]; then
+if [ "$client" = "y" ] || [ "$client" = "Y" ]; then
 	read -p "Enter the number of clients: " num_clients
 	if [ "$num_clients" -eq 0 ]; then
 		echo "You don't have any clients."
@@ -243,7 +238,7 @@ fi
 
 
 read -p "Do you want to have another forward zones? (Y/N):" choice4
-if [ "$choice4" = "y" ]; then
+if [ "$choice4" = "y" ] || [ "$choice4" = "Y" ]; then
 	read -p "Enter the number of forward zones to create: " NUM_ZONES
 	for ((i=1; i<=NUM_ZONES; i++)); do
     read -p "Enter forward zone $i name: " FORWARD_ZONE_NAME
@@ -370,19 +365,19 @@ EOF
 
 read -p "Do you have FTP server? (Y/N):" FTP
 
-if [ "$FTP" = "y" ]; then
+if [ "$FTP" = "y" ] || [ "$FTP" = "Y" ]; then
         cat << EOF >> /var/named/$ZONE_FILE
 ftp     IN      A       $SERVER_IP
 EOF
 
-elif [ "$FTP" = "n" ]; then
+elif [ "$FTP" = "n" ] || [ "$FTP" = "N" ]; then
         echo "you don't have FTP server"
 fi
 
 
 read -p "Do you have any clients? (Y/N): " client
 
-if [ "$client" = "y" ]; then
+if [ "$client" = "y" ] || [ "$client" = "Y" ]; then
         read -p "Enter the number of clients: " num_clients
         if [ "$num_clients" -eq 0 ]; then
                 echo "You don't have any clients."
@@ -404,7 +399,7 @@ fi
 
 
 read -p "Do you want to have another forward zones? (Y/N): " choice3
-if [ "$choice3" = "y" ]; then
+if [ "$choice3" = "y" ] || [ "$choice3" = "Y" ]; then
 	read -p "Enter the number of forward zones" NUM_ZONES
 for ((i=1; i<=NUM_ZONES; i++)); do
     read -p "Enter forward zone $i name: " FORWARD_ZONE_NAME
@@ -435,8 +430,10 @@ www     IN      CNAME   @
 EOF
 done
 
-else [ "$choice3" = "n" ] then
-echo "you do not have another forward zones"
+elif [ "$choice3" = "n" ] || [ "$choice3" = "N" ]; then
+	echo "you do not have another forward zones"
+else
+	echo "Invalid choice. Please enter Y or N."
 fi
 
 
@@ -451,102 +448,115 @@ systemctl restart named
 echo "DNS server is working for RHAL & centos!"
 }
 
-############# Apache For Debian #############
+
+############# Nginx For Debian #############
 
 
-debian_install_apache() {
-apt update
-apt install apache2 -y
+debian_install_nginx() {
 
-ufw allow 'Apache'
-curl -4 icanhazip.com
+	read -p "Do you need specific version of nginx? (Y/N): " NGINX
 
-systemctl start apache2
-systemctl enable apache2
+if [ "$NGINX" = "y" ] || [ "$NGINX" = "Y" ]; then
+    apt install curl gnupg2 ca-certificates lsb-release ubuntu-keyring -y
 
-mkdir /var/www/$DOMAIN
+    curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor \
+        | sudo tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
 
-cat << EOF >> /var/www/$DOMAIN/index.html
-<html>
-    <head>
-        <title>Welcome to $DOMAIN!</title>
-    </head>
-    <body>
-        <h1>Success!  The $DOMAIN virtual host is working!</h1>
-    </body>
-</html>
-EOF
+    gpg --dry-run --quiet --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
 
-USER=$('whoami')
+    echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+    http://nginx.org/packages/ubuntu $(lsb_release -cs) nginx" \
+        | sudo tee /etc/apt/sources.list.d/nginx.list
 
-chown -R $USER:$USER /var/www/$DOMAIN
-chmod -R 755 /var/www/$DOMAIN
+    echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+    http://nginx.org/packages/mainline/ubuntu $(lsb_release -cs) nginx" \
+        | sudo tee -a /etc/apt/sources.list.d/nginx.list
 
-cat << EOF >> /etc/apache2/sites-available/$DOMAIN.conf
-<VirtualHost *:80>
-    ServerAdmin webmaster@localhost
-    ServerName $DOMAIN
-    ServerAlias www.$DOMAIN
-    DocumentRoot /var/www/$DOMAIN
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-EOF
+    echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" \
+        | sudo tee /etc/apt/preferences.d/99nginx
 
-a2ensite $DOMAIN.conf
-a2dissite 000-default.conf
-apache2ctl configtest
+    apt update
 
-read -p "Do you have another sites? (Y/N): " site
+    read -p "Enter version number (e.g., 1.21): " VERS
 
-if [ "$site" = "y" ]; then
-	read -p "Enter the number of sites: " sit_num
-	if [ "$sit_num" -eq 0 ]; then
-		echo "You don't have another sites"
-	else
-                for ((i=1; i<=$sit_num; i++)); do
-			read -p "Enter new site name (domain name) $i: " dom
-			mkdir /var/www/$dom
+    apt install nginx=$VERS.* -y
 
-cat << EOF >> /var/www/$dom/index.html
-<html>
-    <head>
-        <title>Welcome to $dom!</title>
-    </head>
-    <body>
-        <h1>Success!  The $dom virtual host is working!</h1>
-    </body>
-</html>
-EOF
-
-USER=$('whoami')
-
-chown -R $USER:$USER /var/www/$dom
-chmod -R 755 /var/www/$dom
-
-
-cat << EOF >> /etc/apache2/sites-available/$dom.conf
-<VirtualHost *:81>
-    ServerAdmin webmaster@localhost
-    ServerName $dom
-    ServerAlias www.$dom
-    DocumentRoot /var/www/$dom
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-EOF
-
-a2ensite $dom.conf
-a2dissite 000-default.conf
-apache2ctl configtest
-
-done
-	fi
+elif [ "$NGINX" = "n" ] || [ "$NGINX" = "N" ]; then
+    apt update
+    apt install nginx -y
+    apt-mark hold nginx
+    systemctl start nginx
+    systemctl enable nginx
 fi
 
-systemctl restart apache2
+NGFILE="/etc/nginx/conf.d/$DOMAIN.conf"
 
-echo "Apache Server Is Working For Debian!"
+read -p "Enter header for $DOMAIN: " HEADER
+
+cat << EOF > $NGFILE
+server {
+    listen 80;
+    server_name $DOMAIN;
+    index index.html;
+
+    location / {
+        if (\$http_host = "$DOMAIN" ) {
+            add_header X-Server-Location "$HEADER";
+            root /usr/share/nginx/$DOMAIN;
+        }
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOF
+
+mkdir /usr/share/nginx/$DOMAIN
+
+cat << EOF > /usr/share/nginx/$DOMAIN/index.html
+welcome to nginx server!
+EOF
+
+chmod -R 755 /usr/share/nginx/$DOMAIN
+chown -R $USER:www-data /usr/share/nginx/$DOMAIN
+
+read -p "Do you need server blocks? (Y/N): " SERV
+
+if [ "$SERV" = "Y" ] || [ "$SERV" = "y" ]; then
+    read -p "How many server blocks do you need? " SERV_NUMB
+
+    if [ "$SERV_NUMB" -eq 0 ]; then
+        echo "No server blocks added."
+    else
+        for ((i=1; i<=$SERV_NUMB; i++)); do
+            read -p "Enter server name $i: " SER_BLO
+            read -p "Enter header of $i: " HEAD
+
+            ADDSITE="location / {
+    if (\$http_host = \"$SER_BLO\" ) {
+        add_header X-Server-Location \"$HEAD\";
+        root /usr/share/nginx/$SER_BLO;
+    }
+
+}"
+
+line_number=$(awk '/\}/ {x++} x==2 {print NR; exit}' "$NGFILE")
+awk -v addsite="$ADDSITE" -v line_number="$line_number" 'NR==line_number {$0 = addsite RS $0} {print}' "$NGFILE" > temp_file && mv temp_file "$NGFILE"
+sed -i "s/server_name $DOMAIN/& $SER_BLO/g" "$NGFILE"
+
+mkdir -p "/usr/share/nginx/$SER_BLO"
+
+cat << EOF > "/usr/share/nginx/$SER_BLO/index.html"
+welcome to $SER_BLO server!
+EOF
+
+chmod -R 755 "/usr/share/nginx/$SER_BLO"
+chown -R $USER:www-data "/usr/share/nginx/$SER_BLO"
+done
+    fi
+fi
+
+systemctl restart nginx
+
+echo "Nginx Server Is Working!"
 
 }
 
@@ -719,14 +729,14 @@ echo "FTP Server Is Working!"
 }
 
 
-debian_install_dns_apache() {
+debian_install_dns_nginx() {
         debian_install_dns
-        debian_install_apache
+        debian_install_nginx
 }
 
-debian_install_dns_apache_ftp() {
+debian_install_dns_nginx_ftp() {
         debian_install_dns
-        debian_install_apache
+        debian_install_nginx
         debian_install_ftp
 }
 
@@ -746,10 +756,10 @@ centos_install_dns_apache() {
 read -p "Enter your choice 
 	
 	(1.DNS for debian, 
- 	 2.Apache for debian, 
+ 	 2.Nginx for debian, 
 	 3.FTP for debian, 
-	 4.DNS_Apache for debian, 
-	 5.DNS_Apache_FTP for debian, 
+	 4.DNS_Nginx for debian, 
+	 5.DNS_Nginx_FTP for debian, 
 
 	 6.DNS for contos, 
 	 7.Apache for centos, 
@@ -760,16 +770,16 @@ case "$choice2" in
         debian_install_dns
         ;;
     2)
-        debian_install_apache
+        debian_install_nginx
         ;;
     3)
         debian_install_ftp
         ;;
     4)
-        debian_install_dns_apache
+        debian_install_dns_nginx
         ;;
     5)
-        debian_install_dns_apache_ftp
+        debian_install_dns_nginx_ftp
         ;;
     6)
         centos_install_dns
